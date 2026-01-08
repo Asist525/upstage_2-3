@@ -60,12 +60,13 @@ jobs:
           port: 22
           timeout: 30s
           command_timeout: 10m
+          envs: IMAGE_TAG
           script: |
             set -euxo pipefail
             cd ~/upstage_2-3
-
+      
             kubectl set image deployment/backend \
               backend=ghcr.io/asist525/gangwon-gunwon:${IMAGE_TAG} \
               -n gunwon
-
+      
             kubectl rollout status deployment/backend -n gunwon
