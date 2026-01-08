@@ -44,6 +44,38 @@ class UpstageClient:
             if chunk.choices[0].delta.content is not None:
                 yield chunk.choices[0].delta.content
 
-    def chat_with_tools(self, prompt: str):
-        """간단한 tool calling (강의용)"""
-        return run_conversation(self.client)
+    def chat_with_tools(self, prompt: str, tools, tool_choice="auto"):
+        return self.client.chat.completions.create(
+            model="solar-pro2",
+            messages=[{"role": "user", "content": prompt}],
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+
+class UpstageClient:
+    def __init__(self):
+        self.api_key = os.getenv("UPSTAGE_API_KEY")
+        if not self.api_key:
+            raise ValueError("UPSTAGE_API_KEY environment variable is required")
+
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url="https://api.upstage.ai/v1"
+        )
+        self.async_client = AsyncOpenAI(
+            api_key=self.api_key,
+            base_url="https://api.upstage.ai/v1"
+        )
+
+    # =========================
+    # Embedding (SYNC)
+    # =========================
+    def create_embeddings(self, texts: list[str]) -> list[list[float]]:
+        """
+        Vector DB용 임베딩 생성
+        """
+        response = self.client.embeddings.create(
+            model="embedding-query",
+            input=texts,
+        )
+        return [item.embedding for item in response.data]

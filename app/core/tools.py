@@ -1,33 +1,31 @@
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from openai import OpenAI
 
 
-def get_current_weather(location, unit="fahrenheit"):
-    """Get the current weather in a given location"""
-    if unit is None:
-        unit = "fahrenheit"
+def get_current_time(timezone: str):
+    try:
+        tz = ZoneInfo(timezone)
+    except Exception:
+        return json.dumps({"error": "invalid timezone"})
 
-    if "seoul" in location.lower():
-        return json.dumps({"location": "Seoul", "temperature": "10", "unit": unit})
-    elif "san francisco" in location.lower():
-        return json.dumps(
-            {"location": "San Francisco", "temperature": "72", "unit": unit}
-        )
-    elif "paris" in location.lower():
-        return json.dumps({"location": "Paris", "temperature": "22", "unit": unit})
-    else:
-        return json.dumps({"location": location, "temperature": "unknown"})
-
+    now = datetime.now(tz)
+    return json.dumps(
+        {
+            "timezone": timezone,
+            "datetime": now.isoformat(),
+            "hhmm": now.strftime("%H:%M"),
+        }
+    )
 
 
-# Step 2: Send the query and available functions to the model
 def run_conversation(client: OpenAI):
     messages = [
         {
             "role": "user",
-            # "content": "What's the weather like in San Francisco, Seoul, and Paris?",
-            "content": "한국에 서울, 경기도 성남 날씨는 어때?",
+            "content": "get_current_time 함수를 사용해서 Asia/Seoul과 America/New_York의 현재 시간을 알려줘",
         }
     ]
 
@@ -35,52 +33,51 @@ def run_conversation(client: OpenAI):
         {
             "type": "function",
             "function": {
-                "name": "get_current_weather",
-                "description": "Get the current weather in a given location",
+                "name": "get_current_time",
+                "description": "Retrieves current time for the given timezone.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "location": {
+                        "timezone": {
                             "type": "string",
-                            "description": "The city and state, e.g. San Francisco, CA",
-                        },
-                        # "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
-                        "unit": {"type": "string", "enum": ["celsius"]},
+                            "enum": [
+                                "Asia/Seoul",
+                                "America/New_York",
+                                "Europe/London",
+                            ],
+                        }
                     },
-                    "required": ["location"],
+                    "required": ["timezone"],
                 },
             },
         }
     ]
 
-    # Step 3: Check if the model has requested a function call
-    # The model identifies that the query requires external data (e.g., real-time weather) and decides to call a relevant function, such as a weather API.
     response = client.chat.completions.create(
         model="solar-pro2",
         messages=messages,
         tools=tools,
-        tool_choice="auto"
+        tool_choice="auto",
     )
+
     response_message = response.choices[0].message
     tool_calls = response_message.tool_calls
 
-    # Step 4: Execute the function call
-    # The JSON response from the model may not always be valid, so handle errors appropriately
     if tool_calls:
         available_functions = {
-            "get_current_weather": get_current_weather,
-        }  # You can define multiple functions here as needed
-        messages.append(response_message)  # Add the assistant's reply to the conversation history
+            "get_current_time": get_current_time,
+        }
 
-        # Step 5: Process each function call and provide the results to the model
+        messages.append(response_message)
+
         for tool_call in tool_calls:
             function_name = tool_call.function.name
-            function_to_call = available_functions[function_name]
             function_args = json.loads(tool_call.function.arguments)
-            function_response = function_to_call(
-                location=function_args.get("location"),
-                unit=function_args.get("unit"),
-            )  # Call the function with the provided arguments
+
+            function_response = available_functions[function_name](
+                timezone=function_args["timezone"]
+            )
+
             messages.append(
                 {
                     "tool_call_id": tool_call.id,
@@ -88,12 +85,12 @@ def run_conversation(client: OpenAI):
                     "name": function_name,
                     "content": function_response,
                 }
-            )  # Append the function response to the conversation history
+            )
 
-        # Step 6: Generate a new response from the model using the updated conversation history
         second_response = client.chat.completions.create(
             model="solar-pro2",
             messages=messages,
         )
-        return second_response  # Return the final response from the model
+        return second_response
+
     return response_message
