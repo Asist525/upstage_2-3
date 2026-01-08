@@ -61,7 +61,11 @@ jobs:
           timeout: 30s
           command_timeout: 10m
           script: |
-            set -e
+            set -euxo pipefail
             cd ~/upstage_2-3
-            sed -i "s|^\(\s*image:\s*\).*|\1ghcr.io/asist525/gangwon-gunwon:${IMAGE_TAG}|" infra/k8s/application/04-backend.yaml
-            kubectl apply -f infra/k8s/application/04-backend.yaml
+
+            kubectl set image deployment/backend \
+              backend=ghcr.io/asist525/gangwon-gunwon:${IMAGE_TAG} \
+              -n gunwon
+
+            kubectl rollout status deployment/backend -n gunwon
