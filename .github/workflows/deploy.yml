@@ -51,20 +51,17 @@ jobs:
             -t $IMAGE \
             --push .
 
-      # 🔑 SSH 키 복원 (base64 → pem 파일)
-      - name: Write SSH key
-        run: |
-          echo "${{ secrets.EC2_SSH_KEY }}" | base64 -d > ec2_key.pem
-          chmod 600 ec2_key.pem
-
       - name: Deploy to EC2 (K3s)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key_path: ec2_key.pem
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          timeout: 30s
+          command_timeout: 10m
           script: |
             set -e
             cd ~/upstage_2-3
-            sed -i "s|image: .*|image: ghcr.io/asist525/gangwon-gunwon:${IMAGE_TAG}|" infra/k8s/application/04-backend.yaml
+            sed -i "s|^\(\s*image:\s*\).*|\1ghcr.io/asist525/gangwon-gunwon:${IMAGE_TAG}|" infra/k8s/application/04-backend.yaml
             kubectl apply -f infra/k8s/application/04-backend.yaml
